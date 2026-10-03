@@ -14,23 +14,52 @@ import { FeedbackPage } from './pages/FeedbackPage';
 import { LanguageCode } from './utils/i18n';
 import { TeacherRequest, GeneratedResource } from './types';
 import { generateMockResource } from './services/mockGenerator';
+import { requestResourceGeneration } from './services/apiService';
 
 export default function App() {
   const [currentView, setCurrentView] = useState<string>('home');
   const [lang, setLang] = useState<LanguageCode>('en');
   const [activeResource, setActiveResource] = useState<GeneratedResource | null>(null);
   const [lastRequest, setLastRequest] = useState<TeacherRequest | undefined>(undefined);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generationNotice, setGenerationNotice] = useState<string | null>(null);
+  const [usedFallback, setUsedFallback] = useState(false);
 
   const toggleLanguage = () => {
     setLang((prev) => (prev === 'en' ? 'hi' : 'en'));
   };
 
-  const handleGenerate = (req: TeacherRequest) => {
+  const handleGenerate = async (req: TeacherRequest) => {
+    setIsGenerating(true);
     setLastRequest(req);
-    const result = generateMockResource(req);
-    setActiveResource(result);
-    setCurrentView('generated');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    try {
+      const response = await requestResourceGeneration(req);
+      setActiveResource(response.resource);
+      setUsedFallback(response.usedFallback);
+      setGenerationNotice(
+        response.notice ||
+          (response.usedFallback
+            ? 'Loaded verified local curriculum structure (offline fallback).'
+            : 'Generated securely with Gemini Structured Outputs (NEP 2020 / NCF-SE 2023 schema).')
+      );
+      setCurrentView('generated');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch {
+      const fallback = generateMockResource(req);
+      setActiveResource(fallback);
+      setUsedFallback(true);
+      setGenerationNotice('Local verified fallback used (server connection notice).');
+      setCurrentView('generated');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleRetryGeneration = () => {
+    if (lastRequest) {
+      handleGenerate(lastRequest);
+    }
   };
 
   const handleQuickExample = () => {
@@ -78,14 +107,19 @@ export default function App() {
           onGenerate={handleGenerate}
           lang={lang}
           initialValues={lastRequest}
+          isGenerating={isGenerating}
         />
       )}
 
       {currentView === 'generated' && activeResource && (
         <GeneratedResourcePage
+          key={activeResource.id}
           resource={activeResource}
           onModifyInputs={handleModifyInputs}
           lang={lang}
+          generationNotice={generationNotice}
+          usedFallback={usedFallback}
+          onRetryGeneration={handleRetryGeneration}
         />
       )}
 

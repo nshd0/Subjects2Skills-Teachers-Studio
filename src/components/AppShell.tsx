@@ -36,7 +36,7 @@ export const AppShell: React.FC<AppShellProps> = ({
       />
 
       {/* Main Content Viewport */}
-      <main className="flex-1 pb-20 md:pb-12">
+      <main className="flex-1 pb-24 md:pb-12">
         {children}
       </main>
 

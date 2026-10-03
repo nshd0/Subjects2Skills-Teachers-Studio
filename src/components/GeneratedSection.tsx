@@ -33,6 +33,11 @@ export const GeneratedSection: React.FC<GeneratedSectionProps> = ({
   const [isSpinning, setIsSpinning] = useState(false);
   const t = translations[lang];
 
+  // Synchronize internal text state when content changes (e.g. section regeneration)
+  React.useEffect(() => {
+    setTextValue(Array.isArray(content) ? content.join('\n') : content);
+  }, [content]);
+
   const handleSave = () => {
     setIsEditing(false);
     if (onUpdateContent) {

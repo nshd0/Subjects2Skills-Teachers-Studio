@@ -23,6 +23,11 @@ export const RubricTable: React.FC<RubricTableProps> = ({
   const [editableRubric, setEditableRubric] = useState<RubricData>(rubric);
   const t = translations[lang];
 
+  // Synchronize internal rubric state when incoming rubric prop changes
+  React.useEffect(() => {
+    setEditableRubric(rubric);
+  }, [rubric]);
+
   const handleCriterionChange = (index: number, field: keyof RubricCriterion, val: string) => {
     const updated = { ...editableRubric };
     const newCriteria = [...updated.criteria];
@@ -103,8 +108,8 @@ export const RubricTable: React.FC<RubricTableProps> = ({
         </div>
       </div>
 
-      {/* Desktop Table View */}
-      <div className="hidden md:block overflow-x-auto">
+      {/* Desktop Table View (Always displayed in print) */}
+      <div className="hidden md:block print:block overflow-x-auto">
         <table className="w-full text-left text-xs border-collapse">
           <thead>
             <tr className="bg-slate-50 border-b border-slate-200 text-slate-700 font-bold">
@@ -192,29 +197,77 @@ export const RubricTable: React.FC<RubricTableProps> = ({
         </table>
       </div>
 
-      {/* Mobile Stacked View for 375px+ screens */}
-      <div className="md:hidden space-y-4">
+      {/* Mobile Stacked View for 375px+ screens (Hidden in print) */}
+      <div className="md:hidden print:hidden space-y-4">
         {editableRubric.criteria.map((c, idx) => (
           <div key={c.id || idx} className="p-3 rounded-lg border border-slate-200 bg-slate-50/60">
             <div className="font-bold text-sm text-slate-900 mb-2.5 pb-1.5 border-b border-slate-200">
-              {idx + 1}. {c.criterion}
+              {isEditing ? (
+                <div>
+                  <label className="text-[10px] text-slate-500 font-semibold block mb-0.5">Criterion {idx + 1}:</label>
+                  <input
+                    type="text"
+                    value={c.criterion}
+                    onChange={(e) => handleCriterionChange(idx, 'criterion', e.target.value)}
+                    className="w-full text-xs p-1.5 bg-white border border-slate-300 rounded font-semibold text-slate-900"
+                  />
+                </div>
+              ) : (
+                `${idx + 1}. ${c.criterion}`
+              )}
             </div>
             <div className="space-y-2 text-xs">
               <div className="p-2 bg-white rounded border border-slate-200">
                 <span className="font-semibold text-slate-500 block mb-0.5">Beginning (1)</span>
-                <p className="text-slate-700">{c.beginning}</p>
+                {isEditing ? (
+                  <textarea
+                    rows={2}
+                    value={c.beginning}
+                    onChange={(e) => handleCriterionChange(idx, 'beginning', e.target.value)}
+                    className="w-full text-xs p-1 border border-slate-300 rounded text-slate-800"
+                  />
+                ) : (
+                  <p className="text-slate-700">{c.beginning}</p>
+                )}
               </div>
               <div className="p-2 bg-white rounded border border-slate-200">
                 <span className="font-semibold text-slate-600 block mb-0.5">Developing (2)</span>
-                <p className="text-slate-700">{c.developing}</p>
+                {isEditing ? (
+                  <textarea
+                    rows={2}
+                    value={c.developing}
+                    onChange={(e) => handleCriterionChange(idx, 'developing', e.target.value)}
+                    className="w-full text-xs p-1 border border-slate-300 rounded text-slate-800"
+                  />
+                ) : (
+                  <p className="text-slate-700">{c.developing}</p>
+                )}
               </div>
               <div className="p-2 bg-teal-50/50 rounded border border-teal-200">
                 <span className="font-semibold text-teal-800 block mb-0.5">Secure (3) · Grade Target</span>
-                <p className="text-slate-800">{c.secure}</p>
+                {isEditing ? (
+                  <textarea
+                    rows={2}
+                    value={c.secure}
+                    onChange={(e) => handleCriterionChange(idx, 'secure', e.target.value)}
+                    className="w-full text-xs p-1 border border-teal-300 rounded text-slate-900"
+                  />
+                ) : (
+                  <p className="text-slate-800">{c.secure}</p>
+                )}
               </div>
               <div className="p-2 bg-white rounded border border-slate-200">
                 <span className="font-semibold text-slate-700 block mb-0.5">Extending (4)</span>
-                <p className="text-slate-700">{c.extending}</p>
+                {isEditing ? (
+                  <textarea
+                    rows={2}
+                    value={c.extending}
+                    onChange={(e) => handleCriterionChange(idx, 'extending', e.target.value)}
+                    className="w-full text-xs p-1 border border-slate-300 rounded text-slate-800"
+                  />
+                ) : (
+                  <p className="text-slate-700">{c.extending}</p>
+                )}
               </div>
             </div>
           </div>

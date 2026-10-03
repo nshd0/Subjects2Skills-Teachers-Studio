@@ -10,15 +10,17 @@ import { LanguageCode, translations } from '../utils/i18n';
 import { Sparkles } from 'lucide-react';
 
 interface CreateResourcePageProps {
-  onGenerate: (req: TeacherRequest) => void;
+  onGenerate: (req: TeacherRequest) => void | Promise<void>;
   lang: LanguageCode;
   initialValues?: Partial<TeacherRequest>;
+  isGenerating?: boolean;
 }
 
 export const CreateResourcePage: React.FC<CreateResourcePageProps> = ({
   onGenerate,
   lang,
   initialValues,
+  isGenerating,
 }) => {
   const t = translations[lang];
 
@@ -44,6 +46,7 @@ export const CreateResourcePage: React.FC<CreateResourcePageProps> = ({
           onGenerate={onGenerate}
           lang={lang}
           initialValues={initialValues}
+          isGenerating={isGenerating}
         />
       </div>
     </div>

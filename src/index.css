@@ -22,9 +22,18 @@
     .no-print,
     header,
     nav,
+    footer,
     button:not(.print-keep),
     .print-hide {
       display: none !important;
+    }
+
+    textarea, input {
+      border: none !important;
+      box-shadow: none !important;
+      background: transparent !important;
+      resize: none !important;
+      padding: 0 !important;
     }
     
     .print-sheet {

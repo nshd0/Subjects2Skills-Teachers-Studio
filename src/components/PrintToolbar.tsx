@@ -59,7 +59,7 @@ export const PrintToolbar: React.FC<PrintToolbarProps> = ({
   };
 
   return (
-    <div className="no-print bg-white border-b border-slate-200 sticky top-14 sm:top-16 z-30 shadow-xs">
+    <div className="no-print bg-white border-b border-slate-200 static sm:sticky sm:top-16 z-30 shadow-xs">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-2.5 sm:py-3 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           {onBackToEdit && (

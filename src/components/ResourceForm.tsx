@@ -19,9 +19,10 @@ import { LanguageCode, translations } from '../utils/i18n';
 import { Sparkles, ArrowRight, Zap, AlertCircle } from 'lucide-react';
 
 interface ResourceFormProps {
-  onGenerate: (req: TeacherRequest) => void;
+  onGenerate: (req: TeacherRequest) => void | Promise<void>;
   lang: LanguageCode;
   initialValues?: Partial<TeacherRequest>;
+  isGenerating?: boolean;
 }
 
 // Stage to allowed grades mapping
@@ -36,6 +37,7 @@ export const ResourceForm: React.FC<ResourceFormProps> = ({
   onGenerate,
   lang,
   initialValues,
+  isGenerating = false,
 }) => {
   const t = translations[lang];
 
@@ -63,6 +65,25 @@ export const ResourceForm: React.FC<ResourceFormProps> = ({
   );
   const [localContext, setLocalContext] = useState<string>(initialValues?.localContext || '');
   const [customGoal, setCustomGoal] = useState<string>(initialValues?.customGoalOrCompetency || '');
+
+  // Sync state if initialValues changes (e.g. from "Modify Inputs")
+  React.useEffect(() => {
+    if (initialValues) {
+      if (initialValues.stage) setStage(initialValues.stage);
+      if (initialValues.grade) setGrade(initialValues.grade);
+      if (initialValues.subject) setSubject(initialValues.subject);
+      if (initialValues.topic) setTopic(initialValues.topic);
+      if (initialValues.duration) setDuration(initialValues.duration);
+      if (initialValues.desiredResource) setDesiredResource(initialValues.desiredResource);
+      if (initialValues.language) setLanguage(initialValues.language);
+      if (initialValues.classSize !== undefined) setClassSize(initialValues.classSize);
+      if (initialValues.materials !== undefined) setMaterials(initialValues.materials);
+      if (initialValues.internetAccess) setInternetAccess(initialValues.internetAccess);
+      if (initialValues.learnerProfile) setLearnerProfile(initialValues.learnerProfile);
+      if (initialValues.localContext !== undefined) setLocalContext(initialValues.localContext);
+      if (initialValues.customGoalOrCompetency !== undefined) setCustomGoal(initialValues.customGoalOrCompetency);
+    }
+  }, [initialValues]);
 
   // Validation errors
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -111,7 +132,7 @@ export const ResourceForm: React.FC<ResourceFormProps> = ({
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
 
@@ -133,11 +154,11 @@ export const ResourceForm: React.FC<ResourceFormProps> = ({
       customGoalOrCompetency: customGoal.trim(),
     };
 
-    // Realistic brief transition (no latency drag, just clean feedback)
-    setTimeout(() => {
-      onGenerate(payload);
+    try {
+      await onGenerate(payload);
+    } finally {
       setIsSubmitting(false);
-    }, 280);
+    }
   };
 
   return (
@@ -327,13 +348,13 @@ export const ResourceForm: React.FC<ResourceFormProps> = ({
       <div className="pt-2">
         <button
           type="submit"
-          disabled={isSubmitting}
+          disabled={isSubmitting || isGenerating}
           className="w-full min-h-[50px] px-6 py-3 bg-[#0F2438] hover:bg-[#16324F] text-white text-sm sm:text-base font-bold rounded-lg shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400 disabled:opacity-75"
         >
-          {isSubmitting ? (
+          {isSubmitting || isGenerating ? (
             <span className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-teal-300 animate-spin" />
-              <span>{t.generating}</span>
+              <span>{lang === 'hi' ? 'जेमिनी संरचित आउटपुट तैयार हो रहा है...' : 'Generating via Gemini Structured Output...'}</span>
             </span>
           ) : (
             <span className="flex items-center gap-2">

@@ -72,19 +72,70 @@ This release focuses strictly on a high-speed, working, educator-first prototype
 
 ---
 
-## 5. Future Integration Roadmap (Phase 2 & Phase 3)
+## 5. Gemini Structured-Output Generation Architecture
 
-The codebase includes architectural interfaces (`src/services/futureIntegrations.ts`) pre-configured for:
+The studio incorporates a secure, server-side generation layer using the `@google/genai` TypeScript SDK:
 
-1. **Gemini Structured JSON Output:** Integration with `@google/genai` using structured response schemas (`responseSchema`) to generate contextualized regional lesson plans across all 22 scheduled Indian languages.
-2. **Firebase Authentication & Firestore:** Optional teacher login for teachers wishing to save, tag, and organize their semester curriculum plans across devices.
-3. **Google Workspace & Classroom Export:** One-click export to Google Docs and Google Classroom assignments.
-4. **State Curriculum Knowledge Base:** Automated alignment checks against state-specific SCERT and NCERT textbook chapter codes.
-5. **Skill Mapping Engine:** Pre-assessment and post-assessment skill tracking linked to NCF-SE competency codes.
+### A. Environment Configuration
+- `GEMINI_API_KEY`: Server-side API key injected securely from runtime environment/secrets. Never sent to the client browser.
+- `GEMINI_MODEL`: Defaults to `gemini-3.8-flash` for high-speed, cost-efficient, schema-constrained generation.
+- `PORT`: Port for the Express server (defaults to `3000`).
+
+### B. Strict JSON Schemas
+The server enforces strict response schemas (`responseMimeType: "application/json"`, `responseSchema`) using the `Type` enum from `@google/genai`:
+- **Lesson Plan Schema:** Enforces title, curricular goals, competencies, 3 learning outcomes, 3 prior-learning prompts, 5E sequence steps (`Engage`, `Explore`, `Explain`, `Apply`, `Reflect`), experiential activity, differentiated task bands, questioning prompts, formative assessment, 4-level rubric, offline alternative, teacher reflection, and safety notes.
+- **Worksheet Schema:** Up to 5 structured tasks with model answer guides and differentiation notes.
+- **Formative Assessment Schema:** Up to 5 diagnostic items, evaluation rubrics, observation checklist, and exit-ticket prompt.
+- **Rubric Schema:** 4-level developmental matrix (*Beginning*, *Developing*, *Secure*, *Extending*) with up to 3 criteria.
+- **Project Brief Schema:** Driving question, final product, 3–5 milestones, cross-subject links, evidence, and rubric.
+
+### C. Compact Output Validator & Repair Engine (`server/validator.ts`)
+Before presenting content to educators, the server validator verifies and repairs:
+1. **Content Limits:** Caps learning outcomes, prior-learning prompts, differentiated tasks, and teacher questions to a strict maximum of 3 items each. Enforces word count under 900 words.
+2. **Unverified Claims & Endorsements:** Automatically purges false claims of official CBSE, NCERT, or Ministry of Education endorsements or codes. Guarantees the label *"Suggested — teacher review required"*.
+3. **Classroom Safety:** Detects and repairs hazardous instructions (e.g. replaces boiling water with warm water $\le 45^\circ\text{C}$, removes toxic chemicals or unsupervised flame directives).
+4. **Student Privacy Protection:** Strips any prompt or item asking to collect student personal records, marks, phone numbers, or photos.
+
+### D. Multi-Tier Fallback Engine
+If the Gemini API key is unconfigured, rate-limited, unreachable, or returns a malformed response:
+- The system automatically triggers the reliable local deterministic mock generator.
+- The UI displays a clear notice badge indicating that the verified local fallback was loaded, accompanied by a 1-tap **Retry with Gemini** action.
+- The Quick Example (Grade 7 Heat Transfer) flow operates seamlessly both online and offline.
+
+### E. Privacy-Safe Server Telemetry (`server/logger.ts`)
+Server request logs capture performance metrics (`timestamp`, `stage`, `grade`, `subject`, `duration`, `resourceType`, `status`, `latencyMs`, `modelUsed`), but **strictly exclude** teacher-entered topic text, custom notes, generated outputs, and student identifiers.
 
 ---
 
-## 6. Deployment Notes
+## 6. Testing & Quality Assurance Steps
 
-- **Static Compatibility:** The application builds to standard static HTML, CSS, and JS bundles via `npm run build` and can be hosted on Google Cloud Run, Firebase Hosting, Cloudflare Pages, or GitHub Pages.
+To verify generation pipelines and error resilience:
+```bash
+# 1. Start full-stack development server
+npm run dev
+
+# 2. Check health endpoint (returns API key status and model)
+curl http://localhost:3000/api/health
+
+# 3. Test Lesson Plan Generation endpoint
+curl -X POST http://localhost:3000/api/generate-resource \
+  -H "Content-Type: application/json" \
+  -d '{"stage":"Middle","grade":"7","subject":"Science","topic":"Heat Transfer","duration":"40","desiredResource":"Lesson Plan"}'
+
+# 4. Test Section-Level Regeneration endpoint
+curl -X POST http://localhost:3000/api/regenerate-section \
+  -H "Content-Type: application/json" \
+  -d '{"sectionKey":"experientialActivity","request":{"stage":"Middle","grade":"7","subject":"Science","topic":"Heat Transfer","duration":"40","desiredResource":"Lesson Plan"}}'
+
+# 5. Verify local fallback & malformed payload repair
+curl -X POST http://localhost:3000/api/generate-resource \
+  -H "Content-Type: application/json" \
+  -d '{"stage":"InvalidStage","grade":"7"}'
+```
+
+---
+
+## 7. Deployment Notes
+
+- **Static & Full-Stack Modes:** The application runs as an Express + Vite server (`tsx server.ts`) in development, and serves optimized static assets from `dist/` with Express API routes in production.
 - **Print Layout:** Standard A4 page geometry with hidden navigation and print-friendly serif/sans legibility is configured in `src/index.css`.

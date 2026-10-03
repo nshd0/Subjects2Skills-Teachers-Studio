@@ -2,5 +2,7 @@
   "name": "Subjects2Skills Teacher Studio",
   "description": "Free, teacher-controlled competency-based lesson planning tool for Indian K–12 educators aligned with NEP 2020 and NCF-SE 2023 principles.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

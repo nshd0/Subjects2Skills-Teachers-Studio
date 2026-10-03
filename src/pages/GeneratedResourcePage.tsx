@@ -10,21 +10,33 @@ import { PrintToolbar } from '../components/PrintToolbar';
 import { GeneratedSection } from '../components/GeneratedSection';
 import { RubricTable } from '../components/RubricTable';
 import { sectionVariants } from '../services/mockGenerator';
-import { AlertCircle, Clock, CheckCircle2, Lightbulb, ShieldAlert, Sparkles, RefreshCw } from 'lucide-react';
+import { requestSectionRegeneration } from '../services/apiService';
+import { AlertCircle, Clock, CheckCircle2, Lightbulb, ShieldAlert, Sparkles, RefreshCw, Cpu, RotateCcw } from 'lucide-react';
 
 interface GeneratedResourcePageProps {
   resource: GeneratedResource;
   onModifyInputs: () => void;
   lang: LanguageCode;
+  generationNotice?: string | null;
+  usedFallback?: boolean;
+  onRetryGeneration?: () => void;
 }
 
 export const GeneratedResourcePage: React.FC<GeneratedResourcePageProps> = ({
   resource: initialResource,
   onModifyInputs,
   lang,
+  generationNotice,
+  usedFallback = false,
+  onRetryGeneration,
 }) => {
   const [resource, setResource] = useState<GeneratedResource>(initialResource);
   const t = translations[lang];
+
+  // Synchronize internal state whenever initialResource prop updates
+  React.useEffect(() => {
+    setResource(initialResource);
+  }, [initialResource]);
 
   // Section variant rotation counters
   const [variantIndices, setVariantIndices] = useState<Record<string, number>>({});
@@ -38,28 +50,43 @@ export const GeneratedResourcePage: React.FC<GeneratedResourcePageProps> = ({
     return list[nextIndex];
   };
 
-  // Regeneration handlers for specific Lesson Plan fields
-  const handleRegenerateField = (field: keyof LessonPlanData, variantKey: string) => {
+  // Regeneration handlers for specific Lesson Plan fields (server-side Gemini with local fallback)
+  const handleRegenerateField = async (field: keyof LessonPlanData, variantKey: string) => {
     if (!resource.lessonPlan) return;
-    const nextValue = rotateVariant(variantKey);
-    if (!nextValue) return;
+    const currentVal = resource.lessonPlan[field];
+    const currentIndex = variantIndices[variantKey] || 0;
 
-    setResource({
-      ...resource,
-      lessonPlan: {
-        ...resource.lessonPlan,
-        [field]: nextValue,
-      },
-    });
+    const res = await requestSectionRegeneration(variantKey, resource.request, currentVal, currentIndex);
+    setVariantIndices((prev) => ({ ...prev, [variantKey]: currentIndex + 1 }));
+
+    if (res.updatedContent) {
+      setResource((prev) => {
+        if (!prev.lessonPlan) return prev;
+        return {
+          ...prev,
+          lessonPlan: {
+            ...prev.lessonPlan,
+            [field]: res.updatedContent,
+          },
+        };
+      });
+    }
   };
 
   // Regeneration handler for learning sequence step
-  const handleRegenerateStep = (stepIdx: number) => {
+  const handleRegenerateStep = async (stepIdx: number) => {
     if (!resource.lessonPlan) return;
     const steps = [...resource.lessonPlan.learningSequence];
     const current = steps[stepIdx];
-    
-    // Rotate variation
+    const currentIndex = current.variantId || 0;
+
+    const res = await requestSectionRegeneration(
+      `step_${current.step}`,
+      resource.request,
+      current.teacherAction,
+      currentIndex
+    );
+
     const actionVariants = [
       {
         teacher: `Present a contrasting local example from student homes (e.g. steel tumbler vs earthen kulhad) to prompt inquiry.`,
@@ -75,21 +102,27 @@ export const GeneratedResourcePage: React.FC<GeneratedResourcePageProps> = ({
       },
     ];
 
-    const currentVar = current.variantId || 0;
-    const nextVar = (currentVar + 1) % actionVariants.length;
+    const nextVar = (currentIndex + 1) % actionVariants.length;
+    const newTeacherAction = res.updatedContent && typeof res.updatedContent === 'string'
+      ? res.updatedContent
+      : actionVariants[nextVar].teacher;
+
     steps[stepIdx] = {
       ...current,
-      teacherAction: actionVariants[nextVar].teacher,
+      teacherAction: newTeacherAction,
       studentAction: actionVariants[nextVar].student,
       variantId: nextVar,
     };
 
-    setResource({
-      ...resource,
-      lessonPlan: {
-        ...resource.lessonPlan,
-        learningSequence: steps,
-      },
+    setResource((prev) => {
+      if (!prev.lessonPlan) return prev;
+      return {
+        ...prev,
+        lessonPlan: {
+          ...prev.lessonPlan,
+          learningSequence: steps,
+        },
+      };
     });
   };
 
@@ -115,6 +148,36 @@ export const GeneratedResourcePage: React.FC<GeneratedResourcePageProps> = ({
       />
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6 print:py-0 print:px-0">
+        {/* Generation Engine Status Notice (hidden in print) */}
+        {generationNotice && (
+          <div
+            className={`no-print p-3 sm:p-4 rounded-xl border text-xs sm:text-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${
+              usedFallback
+                ? 'bg-amber-50/80 border-amber-200 text-amber-950'
+                : 'bg-teal-50/80 border-teal-200 text-teal-950'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              {usedFallback ? (
+                <Cpu className="w-4 h-4 text-amber-700 shrink-0" />
+              ) : (
+                <Sparkles className="w-4 h-4 text-teal-700 shrink-0" />
+              )}
+              <span>{generationNotice}</span>
+            </div>
+            {onRetryGeneration && usedFallback && (
+              <button
+                type="button"
+                onClick={onRetryGeneration}
+                className="self-end sm:self-auto shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md bg-white border border-amber-300 text-amber-900 hover:bg-amber-100 transition-colors"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span>Retry with Gemini</span>
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Print Sheet Container */}
         <div className="print-sheet bg-white border border-slate-200 rounded-2xl p-5 sm:p-8 shadow-xs space-y-6">
           
