@@ -14,7 +14,7 @@ import { FeedbackPage } from './pages/FeedbackPage';
 import { LanguageCode } from './utils/i18n';
 import { TeacherRequest, GeneratedResource } from './types';
 import { generateMockResource } from './services/mockGenerator';
-import { requestResourceGeneration } from './services/apiService';
+import { requestResourceGeneration, FALLBACK_NOTICE } from './services/apiService';
 
 export default function App() {
   const [currentView, setCurrentView] = useState<string>('home');
@@ -37,10 +37,9 @@ export default function App() {
       setActiveResource(response.resource);
       setUsedFallback(response.usedFallback);
       setGenerationNotice(
-        response.notice ||
-          (response.usedFallback
-            ? 'Loaded verified local curriculum structure (offline fallback).'
-            : 'Generated securely with Gemini Structured Outputs (NEP 2020 / NCF-SE 2023 schema).')
+        response.usedFallback
+          ? FALLBACK_NOTICE
+          : 'Generated securely with Gemini Structured Outputs (NEP 2020 / NCF-SE 2023 schema).'
       );
       setCurrentView('generated');
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -48,7 +47,7 @@ export default function App() {
       const fallback = generateMockResource(req);
       setActiveResource(fallback);
       setUsedFallback(true);
-      setGenerationNotice('Local verified fallback used (server connection notice).');
+      setGenerationNotice(FALLBACK_NOTICE);
       setCurrentView('generated');
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } finally {
@@ -84,6 +83,56 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const handleLaunchUseCase = (useCaseKey: string, initialTopic?: string) => {
+    const resourceMap: Record<string, 'Lesson Plan' | 'Worksheet' | 'Formative Assessment' | 'Rubric' | 'Project Brief'> = {
+      'plan-a-lesson': 'Lesson Plan',
+      'check-prior-learning': 'Formative Assessment',
+      'differentiate-work': 'Worksheet',
+      'create-an-assessment': 'Formative Assessment',
+      'build-a-project': 'Project Brief',
+      'make-a-rubric': 'Rubric',
+      'give-feedback': 'Formative Assessment',
+      'prepare-a-parent-note': 'Lesson Plan',
+    };
+
+    const targetResource = resourceMap[useCaseKey] || 'Lesson Plan';
+    setLastRequest((prev) => ({
+      stage: prev?.stage || 'Middle',
+      grade: prev?.grade || '7',
+      subject: prev?.subject || 'Science',
+      topic: initialTopic || (useCaseKey === 'check-prior-learning' ? 'Key Concept Diagnostic' : useCaseKey === 'prepare-a-parent-note' ? 'Weekly Learning Progress & Family Support' : prev?.topic || ''),
+      duration: prev?.duration || '40',
+      desiredResource: targetResource,
+      language: prev?.language || 'English',
+      internetAccess: prev?.internetAccess || 'None',
+      learnerProfile: prev?.learnerProfile || 'Mixed levels',
+    }));
+    setCurrentView('create');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleSelectStage = (stage: 'Foundational' | 'Preparatory' | 'Middle' | 'Secondary') => {
+    const stageGradeMap: Record<string, string> = {
+      Foundational: '2',
+      Preparatory: '4',
+      Middle: '7',
+      Secondary: '10',
+    };
+    setLastRequest((prev) => ({
+      stage,
+      grade: stageGradeMap[stage] || '7',
+      subject: stage === 'Foundational' ? 'Foundational Numeracy & Literacy' : prev?.subject || 'Science',
+      topic: prev?.topic || '',
+      duration: prev?.duration || '40',
+      desiredResource: prev?.desiredResource || 'Lesson Plan',
+      language: prev?.language || 'English',
+      internetAccess: prev?.internetAccess || 'None',
+      learnerProfile: prev?.learnerProfile || 'Mixed levels',
+    }));
+    setCurrentView('create');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   return (
     <AppShell
       currentView={currentView}
@@ -93,11 +142,17 @@ export default function App() {
       }}
       lang={lang}
       onToggleLang={toggleLanguage}
+      onQuickExample={handleQuickExample}
     >
       {currentView === 'home' && (
         <HomePage
-          onNavigate={(view) => setCurrentView(view)}
+          onNavigate={(view) => {
+            setCurrentView(view);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
           onQuickExample={handleQuickExample}
+          onLaunchUseCase={handleLaunchUseCase}
+          onSelectStage={handleSelectStage}
           lang={lang}
         />
       )}

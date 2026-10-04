@@ -12,6 +12,95 @@ import { logServerRequest } from './logger';
 // Selected standard model per gemini-api guidelines
 const MODEL_NAME = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
 
+export const FALLBACK_NOTICE = 'AI customisation is temporarily unavailable. Showing the local rule-based template.';
+export const RETRY_DELAYS_MS = [500, 1000]; // Max 2 retries (total 3 attempts)
+
+/**
+ * Determine whether an error is retriable (429, 500, 503).
+ * Explicitly rejects 400, 401, 403 or client invalid argument errors.
+ */
+export function isRetriableError(err: any): boolean {
+  if (!err) return false;
+
+  const code = err?.status || err?.code || err?.statusCode || err?.error?.code || err?.error?.status;
+  const msg = String(err?.message || '').toLowerCase();
+
+  // Terminal non-retriable errors
+  if (code === 400 || code === 401 || code === 403) return false;
+  if (msg.includes('400') || msg.includes('401') || msg.includes('403')) return false;
+  if (
+    msg.includes('unauthenticated') ||
+    msg.includes('permission_denied') ||
+    msg.includes('invalid_argument') ||
+    msg.includes('api_key_invalid')
+  ) {
+    return false;
+  }
+
+  // Temporary retriable errors
+  if (code === 429 || code === 500 || code === 503) return true;
+  if (msg.includes('429') || msg.includes('500') || msg.includes('503')) return true;
+  if (
+    msg.includes('resource_exhausted') ||
+    msg.includes('unavailable') ||
+    msg.includes('high demand') ||
+    msg.includes('overloaded') ||
+    msg.includes('timeout')
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+export interface StartupDiagnostic {
+  isKeyConfigured: boolean;
+  model: string;
+  mode: 'gemini_active' | 'local_fallback';
+  statusMessage: string;
+}
+
+let startupDiagnostic: StartupDiagnostic | null = null;
+
+export function getStartupDiagnostic(): StartupDiagnostic {
+  if (!startupDiagnostic) {
+    const isConfigured = Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'MY_GEMINI_API_KEY');
+    startupDiagnostic = {
+      isKeyConfigured: isConfigured,
+      model: MODEL_NAME,
+      mode: isConfigured ? 'gemini_active' : 'local_fallback',
+      statusMessage: isConfigured
+        ? `Gemini API key configured. Model target: ${MODEL_NAME}`
+        : 'Gemini API key unconfigured. Studio running in deterministic local fallback mode.',
+    };
+  }
+  return startupDiagnostic;
+}
+
+export async function verifyServerStartup(): Promise<StartupDiagnostic> {
+  const isConfigured = Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'MY_GEMINI_API_KEY');
+
+  if (!isConfigured) {
+    startupDiagnostic = {
+      isKeyConfigured: false,
+      model: MODEL_NAME,
+      mode: 'local_fallback',
+      statusMessage: 'GEMINI_API_KEY is unconfigured. Studio is operating in high-reliability deterministic local fallback mode.',
+    };
+    console.log('[STARTUP_DIAGNOSTIC] Gemini API Key: Unconfigured | Mode: Local Rule-Based Fallback');
+    return startupDiagnostic;
+  }
+
+  startupDiagnostic = {
+    isKeyConfigured: true,
+    model: MODEL_NAME,
+    mode: 'gemini_active',
+    statusMessage: `GEMINI_API_KEY is configured. Active Model: ${MODEL_NAME}. Bounded retry (429/500/503: 500ms, 1000ms) active.`,
+  };
+  console.log(`[STARTUP_DIAGNOSTIC] Gemini API Key: Configured | Model: ${MODEL_NAME} | Mode: Production Ready`);
+  return startupDiagnostic;
+}
+
 let genAIInstance: GoogleGenAI | null = null;
 
 function getGenAI(): GoogleGenAI | null {
@@ -295,9 +384,9 @@ export async function generateResourceWithGemini(
       status: 'fallback',
       latencyMs: Date.now() - startTime,
       model: 'local-mock',
-      errorReason: 'GEMINI_API_KEY missing or not configured',
+      errorReason: 'GEMINI_API_KEY missing or unconfigured',
     });
-    return { resource: fallback, usedFallback: true, fallbackReason: 'API key not configured. Generated via local offline engine.' };
+    return { resource: fallback, usedFallback: true, fallbackReason: FALLBACK_NOTICE };
   }
 
   let targetSchema: any = lessonPlanSchema;
@@ -320,17 +409,39 @@ Learner Profile: ${req.learnerProfile || 'Mixed levels'}
 Local Context / Real-life Application: ${req.localContext || 'Everyday Indian household or community context'}
 Custom Curricular Goal / Focus: ${req.customGoalOrCompetency || 'Standard NCF-SE competency'}`;
 
+  let response: any = null;
+  let lastError: any = null;
+  const maxRetries = RETRY_DELAYS_MS.length;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      response = await ai.models.generateContent({
+        model: MODEL_NAME,
+        contents: prompt,
+        config: {
+          systemInstruction: SYSTEM_INSTRUCTION,
+          temperature: 0.7,
+          responseMimeType: 'application/json',
+          responseSchema: targetSchema,
+        },
+      });
+      lastError = null;
+      break;
+    } catch (err: any) {
+      lastError = err;
+      if (attempt < maxRetries && isRetriableError(err)) {
+        const delay = RETRY_DELAYS_MS[attempt];
+        await new Promise((r) => setTimeout(r, delay));
+        continue;
+      }
+      break;
+    }
+  }
+
   try {
-    const response = await ai.models.generateContent({
-      model: MODEL_NAME,
-      contents: prompt,
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
-        temperature: 0.7,
-        responseMimeType: 'application/json',
-        responseSchema: targetSchema,
-      },
-    });
+    if (lastError || !response) {
+      throw lastError || new Error('No response received from model after retries.');
+    }
 
     const text = response.text?.trim() || '';
     if (!text) {
@@ -381,13 +492,13 @@ Custom Curricular Goal / Focus: ${req.customGoalOrCompetency || 'Standard NCF-SE
     return {
       resource: fallbackResource,
       usedFallback: true,
-      fallbackReason: `Gemini service notice (${errorReason}). Used reliable local offline engine.`,
+      fallbackReason: FALLBACK_NOTICE,
     };
   }
 }
 
 /**
- * Regenerate a specific section using Gemini Structured Output, with fallback
+ * Regenerate a specific section using Gemini Structured Output, with bounded retry & fallback
  */
 export async function regenerateSectionWithGemini(
   sectionKey: string,
@@ -408,26 +519,48 @@ Previous value: ${JSON.stringify(currentValue || '')}
 
 Return as JSON object: { "result": "..." } or { "result": ["..."] } if it requires bullets.`;
 
-  try {
-    const response = await ai.models.generateContent({
-      model: MODEL_NAME,
-      contents: prompt,
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
-        temperature: 0.8,
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            result: {
-              type: Array.isArray(currentValue) ? Type.ARRAY : Type.STRING,
-              items: Array.isArray(currentValue) ? { type: Type.STRING } : undefined,
+  let response: any = null;
+  let lastError: any = null;
+  const maxRetries = RETRY_DELAYS_MS.length;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      response = await ai.models.generateContent({
+        model: MODEL_NAME,
+        contents: prompt,
+        config: {
+          systemInstruction: SYSTEM_INSTRUCTION,
+          temperature: 0.8,
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              result: {
+                type: Array.isArray(currentValue) ? Type.ARRAY : Type.STRING,
+                items: Array.isArray(currentValue) ? { type: Type.STRING } : undefined,
+              },
             },
+            required: ['result'],
           },
-          required: ['result'],
         },
-      },
-    });
+      });
+      lastError = null;
+      break;
+    } catch (err: any) {
+      lastError = err;
+      if (attempt < maxRetries && isRetriableError(err)) {
+        const delay = RETRY_DELAYS_MS[attempt];
+        await new Promise((r) => setTimeout(r, delay));
+        continue;
+      }
+      break;
+    }
+  }
+
+  try {
+    if (lastError || !response) {
+      throw lastError || new Error('No response received for section regeneration');
+    }
 
     const text = response.text?.trim() || '';
     const parsed = JSON.parse(text);

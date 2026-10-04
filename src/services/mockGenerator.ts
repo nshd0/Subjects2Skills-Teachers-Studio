@@ -14,6 +14,7 @@ import {
   LearningSequenceStep,
   DifferentiatedTasks,
   QuestioningPrompts,
+  ResourceMetadata,
 } from '../types';
 
 /**
@@ -174,8 +175,17 @@ export function generateMockResource(req: TeacherRequest): GeneratedResource {
     req.subject.toLowerCase().includes('sci') && 
     req.topic.toLowerCase().includes('heat');
 
-  const id = `res_${Date.now()}`;
+  const id = `res_mock_${Date.now()}`;
   const createdAt = new Date().toISOString();
+
+  const metadata: ResourceMetadata = {
+    id,
+    generationEngine: 'local_deterministic_engine',
+    engineLabel: 'Local Rule-Based Template',
+    generatedAt: createdAt,
+    teacherReviewRequired: true,
+    curriculumMappingStatus: 'suggested_unverified',
+  };
 
   if (req.desiredResource === 'Lesson Plan') {
     const lessonPlan: LessonPlanData = isQuickExample 
@@ -190,6 +200,7 @@ export function generateMockResource(req: TeacherRequest): GeneratedResource {
       createdAt,
       request: req,
       resourceType: 'Lesson Plan',
+      metadata,
       lessonPlan
     };
   }
@@ -240,6 +251,7 @@ export function generateMockResource(req: TeacherRequest): GeneratedResource {
       createdAt,
       request: req,
       resourceType: 'Worksheet',
+      metadata,
       worksheet
     };
   }
@@ -294,6 +306,7 @@ export function generateMockResource(req: TeacherRequest): GeneratedResource {
       createdAt,
       request: req,
       resourceType: 'Formative Assessment',
+      metadata,
       assessment
     };
   }
@@ -308,6 +321,7 @@ export function generateMockResource(req: TeacherRequest): GeneratedResource {
       createdAt,
       request: req,
       resourceType: 'Rubric',
+      metadata,
       rubric
     };
   }
@@ -363,6 +377,7 @@ export function generateMockResource(req: TeacherRequest): GeneratedResource {
     createdAt,
     request: req,
     resourceType: 'Project Brief',
+    metadata,
     projectBrief
   };
 }

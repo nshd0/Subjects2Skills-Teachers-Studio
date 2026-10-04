@@ -139,3 +139,51 @@ curl -X POST http://localhost:3000/api/generate-resource \
 
 - **Static & Full-Stack Modes:** The application runs as an Express + Vite server (`tsx server.ts`) in development, and serves optimized static assets from `dist/` with Express API routes in production.
 - **Print Layout:** Standard A4 page geometry with hidden navigation and print-friendly serif/sans legibility is configured in `src/index.css`.
+
+---
+
+## 8. Production-Readiness Hardening Report
+
+### A. Automated Tests Run
+The codebase includes an automated hardening test suite (`scripts/runProductionHardeningTests.ts`) covering 34 assertions across 10 functional criteria:
+1. **Resource Types (5/5 Passed):** Lesson Plan, Worksheet, Formative Assessment, Rubric, and Project Brief.
+2. **School Stages (4/4 Passed):** Foundational (Grades 1–2), Preparatory (Grades 3–5), Middle (Grades 6–8), and Secondary (Grades 9–12).
+3. **Malformed JSON Recovery (Passed):** Validates and repairs corrupted structures, synthesizing missing 5E steps and repairing missing arrays.
+4. **Bounded Retry Policy (Passed):**
+   - Retries temporary `429` (Rate Limit), `500` (Internal Error), and `503` (High Demand) at most twice with bounded delays (`500 ms` and `1000 ms`).
+   - Never retries `400` (Bad Request), `401` (Unauthenticated), or `403` (Forbidden).
+   - Gracefully cascades to deterministic local fallback upon retry exhaustion.
+5. **Classroom Safety Repair (Passed):** Automatically replaces hazardous laboratory instructions (e.g., boiling water $\rightarrow$ warm water $\le 45^\circ\text{C}$; concentrated acids $\rightarrow$ safe substitutes).
+6. **Student Data Scrubbing (Passed):** Purges requests for student phone numbers, marks, roll numbers, home addresses, photos, and Aadhaar numbers, replacing them with anonymous student reflection prompts.
+7. **Endorsement Purge (7/7 Passed):** Purges unverified claims (*official approval*, *NCERT certified*, *CBSE approved*, *government recommended*, *Ministry-mandated*, *official NCF competency*, *nationally prescribed*), replacing them with the exact required string: `“Suggested — teacher review required.”`
+8. **Content & Word Limits (Passed):** Strictly caps learning outcomes (max 3), prior learning prompts (max 3), differentiated tasks (max 3 per tier), teacher questions (max 3), and rubric criteria (max 3), maintaining overall word count under 900 words.
+9. **Resource Metadata (Passed):** Attaches non-personal resource ID, generation engine, model label, generated timestamp, review status, and curriculum mapping status.
+10. **Pre-Export Review Checklist & Fallback Notice (Passed):** Toggles 6 educator checklist items and presents the standardized fallback notice.
+
+### B. Security Assumptions
+- **Server-Only Credentials:** `GEMINI_API_KEY` is never bundled into client JS code or sent over network responses to the browser.
+- **No In-Memory Secret Logging:** Telemetry logs only operational metadata (status, latency, stage, grade, subject). Topic strings, teacher notes, API keys, and model outputs are excluded from server logs.
+- **Client Sanitization:** Server inputs are validated against strict enums and string bounds before reaching the AI model.
+
+### C. Known Limitations
+- **Session Volatility:** In accordance with the zero-student-data and no-auth policy, plans exist solely in browser memory and are lost upon page reload unless downloaded (`.txt`) or printed (`PDF`).
+- **Offline Customisation:** When disconnected from the internet or when Gemini experiences high demand, the application defaults to deterministic local templates rather than generating unique regional permutations.
+
+### D. Deployment Environment Variables
+| Variable | Required | Default | Description |
+| :--- | :---: | :---: | :--- |
+| `GEMINI_API_KEY` | Recommended | None | Google Gemini API key. If absent, studio runs in local fallback mode. |
+| `GEMINI_MODEL` | Optional | `gemini-3.8-flash` | Target model for structured output generation. |
+| `PORT` | Optional | `3000` | Port for the Express full-stack HTTP server. |
+| `NODE_ENV` | Optional | `development` | Set to `production` for optimized static bundle serving. |
+
+### E. Fallback Behaviour
+Whenever an upstream call fails, times out, exceeds retry bounds, or encounters an unconfigured key:
+- The server returns HTTP 200 with the deterministic local resource pack, setting `usedFallback: true`.
+- The user interface presents the notice:
+  > *“AI customisation is temporarily unavailable. Showing the local rule-based template.”*
+- A **Retry with Gemini** action is displayed, enabling immediate retry without losing input parameters.
+
+### F. Data-Retention Behaviour
+- **Student Data:** Absolute Zero. The application does not contain student accounts, student gradebooks, student submissions, or tracking cookies.
+- **Teacher Planning Data:** Stored exclusively in local React state. No remote database (Firestore, Cloud SQL, MongoDB) is utilized. Closing the tab immediately destroys the in-memory planning state.

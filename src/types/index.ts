@@ -127,11 +127,21 @@ export interface ProjectBriefData {
   rubric: RubricData;
 }
 
+export interface ResourceMetadata {
+  id: string;
+  generationEngine: 'gemini_structured_output' | 'local_deterministic_engine';
+  engineLabel: string;
+  generatedAt: string;
+  teacherReviewRequired: boolean;
+  curriculumMappingStatus: 'suggested_unverified';
+}
+
 export interface GeneratedResource {
   id: string;
   createdAt: string;
   request: TeacherRequest;
   resourceType: DesiredResource;
+  metadata?: ResourceMetadata;
   lessonPlan?: LessonPlanData;
   worksheet?: WorksheetData;
   assessment?: AssessmentData;

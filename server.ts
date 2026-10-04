@@ -8,7 +8,12 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { validateTeacherRequest } from './server/validator';
-import { generateResourceWithGemini, regenerateSectionWithGemini } from './server/geminiService';
+import {
+  generateResourceWithGemini,
+  regenerateSectionWithGemini,
+  verifyServerStartup,
+  getStartupDiagnostic,
+} from './server/geminiService';
 
 dotenv.config();
 
@@ -18,13 +23,15 @@ const port = parseInt(process.env.PORT || '3000', 10);
 
 app.use(express.json({ limit: '1mb' }));
 
-// Health check endpoint
+// Health check and diagnostic endpoint (never exposes secrets)
 app.get('/api/health', (_req, res) => {
-  const hasKey = Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'MY_GEMINI_API_KEY');
+  const diag = getStartupDiagnostic();
   res.json({
     status: 'ok',
-    hasGeminiApiKey: hasKey,
-    model: process.env.GEMINI_MODEL || 'gemini-3.8-flash',
+    hasGeminiApiKey: diag.isKeyConfigured,
+    model: diag.model,
+    mode: diag.mode,
+    statusMessage: diag.statusMessage,
   });
 });
 
@@ -97,6 +104,7 @@ if (isProduction) {
   app.use(vite.middlewares);
 }
 
-app.listen(port, '0.0.0.0', () => {
+app.listen(port, '0.0.0.0', async () => {
   console.log(`[SERVER] Subjects2Skills Teacher Studio running on http://0.0.0.0:${port} (${isProduction ? 'production' : 'development'})`);
+  await verifyServerStartup();
 });

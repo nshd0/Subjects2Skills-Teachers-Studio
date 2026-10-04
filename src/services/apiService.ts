@@ -6,6 +6,8 @@
 import { TeacherRequest, GeneratedResource } from '../types';
 import { generateMockResource, sectionVariants } from './mockGenerator';
 
+export const FALLBACK_NOTICE = 'AI customisation is temporarily unavailable. Showing the local rule-based template.';
+
 export interface GenerationResponse {
   resource: GeneratedResource;
   usedFallback: boolean;
@@ -28,13 +30,12 @@ export async function requestResourceGeneration(req: TeacherRequest): Promise<Ge
     });
 
     if (!res.ok) {
-      const errJson = await res.json().catch(() => null);
       const fallbackResource = generateMockResource(req);
       return {
         resource: fallbackResource,
         usedFallback: true,
         statusType: 'api_unavailable',
-        notice: errJson?.error || `Server responded with status ${res.status}. Switched to local offline generator.`,
+        notice: FALLBACK_NOTICE,
       };
     }
 
@@ -45,7 +46,7 @@ export async function requestResourceGeneration(req: TeacherRequest): Promise<Ge
         resource: fallbackResource,
         usedFallback: true,
         statusType: 'malformed_response',
-        notice: 'Received malformed JSON structure from server. Cleaned and loaded local offline resource.',
+        notice: FALLBACK_NOTICE,
       };
     }
 
@@ -53,16 +54,16 @@ export async function requestResourceGeneration(req: TeacherRequest): Promise<Ge
       resource: data.resource,
       usedFallback: Boolean(data.usedFallback),
       statusType: data.usedFallback ? 'local_fallback' : 'gemini_success',
-      notice: data.fallbackReason || undefined,
+      notice: data.usedFallback ? FALLBACK_NOTICE : (data.fallbackReason || undefined),
     };
-  } catch (err: any) {
+  } catch {
     // Network or server failure
     const fallbackResource = generateMockResource(req);
     return {
       resource: fallbackResource,
       usedFallback: true,
       statusType: 'api_unavailable',
-      notice: `Connection notice: ${err?.message || 'Server unreachable'}. Using reliable local offline generator.`,
+      notice: FALLBACK_NOTICE,
     };
   }
 }

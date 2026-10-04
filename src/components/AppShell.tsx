@@ -13,6 +13,7 @@ interface AppShellProps {
   onNavigate: (view: string) => void;
   lang: LanguageCode;
   onToggleLang: () => void;
+  onQuickExample?: () => void;
   children: React.ReactNode;
 }
 
@@ -21,9 +22,23 @@ export const AppShell: React.FC<AppShellProps> = ({
   onNavigate,
   lang,
   onToggleLang,
+  onQuickExample,
   children,
 }) => {
   const t = translations[lang];
+
+  const handleHowItWorks = () => {
+    if (currentView !== 'home') {
+      onNavigate('home');
+      setTimeout(() => {
+        const el = document.getElementById('how-it-works');
+        if (el) el.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+    } else {
+      const el = document.getElementById('how-it-works');
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F8FAFB] text-slate-800">
@@ -33,50 +48,99 @@ export const AppShell: React.FC<AppShellProps> = ({
         onNavigate={onNavigate}
         lang={lang}
         onToggleLang={onToggleLang}
+        onQuickExample={onQuickExample}
       />
 
       {/* Main Content Viewport */}
-      <main className="flex-1 pb-24 md:pb-12">
+      <main className="flex-1 pb-10">
         {children}
       </main>
 
-      {/* Footer (Desktop & Tablet) */}
-      <footer className="no-print bg-[#0B1B2B] text-slate-400 text-xs py-8 border-t border-[#16324F] hidden md:block">
-        <div className="max-w-6xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="space-y-1 text-center md:text-left">
-            <div className="flex items-center gap-2 justify-center md:justify-start">
-              <span className="font-bold text-white tracking-tight">
-                Subjects2Skills Teacher Studio
-              </span>
-              <span className="text-teal-400">·</span>
-              <span className="text-slate-400">NEP 2020 & NCF-SE 2023 Aligned MVP</span>
+      {/* Footer (Section 12: Unified, responsive, visible on mobile & desktop with bottom bar clearance) */}
+      <footer className="no-print bg-[#0B1B2B] text-slate-400 text-xs py-10 border-t border-[#16324F] mb-14 md:mb-0">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 space-y-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-white text-sm sm:text-base tracking-tight">
+                  Subjects2Skills Teacher Studio
+                </span>
+                <span className="text-teal-400" aria-hidden="true">·</span>
+                <span className="text-teal-300 text-xs font-medium">NEP 2020 & NCF-SE 2023</span>
+              </div>
+              <p className="text-slate-300 text-xs">
+                AI-enabled workflows for Indian K–12 teachers
+              </p>
             </div>
-            <p className="text-slate-400 text-[11px]">
-              {t.tagline} {t.officialDisclaimer}
-            </p>
+
+            {/* Navigation links */}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-300">
+              <button
+                type="button"
+                onClick={() => onNavigate('create')}
+                className="hover:text-white transition-colors cursor-pointer"
+              >
+                {t.navCreate}
+              </button>
+              <span className="text-slate-600" aria-hidden="true">·</span>
+              <button
+                type="button"
+                onClick={() => onNavigate('toolkit')}
+                className="hover:text-white transition-colors cursor-pointer"
+              >
+                {t.navToolkit}
+              </button>
+              <span className="text-slate-600" aria-hidden="true">·</span>
+              <button
+                type="button"
+                onClick={handleHowItWorks}
+                className="hover:text-white transition-colors cursor-pointer"
+              >
+                {lang === 'hi' ? 'यह कैसे काम करता है' : 'How It Works'}
+              </button>
+              <span className="text-slate-600" aria-hidden="true">·</span>
+              <button
+                type="button"
+                onClick={() => onNavigate('feedback')}
+                className="hover:text-white transition-colors cursor-pointer"
+              >
+                {t.navFeedback}
+              </button>
+              <span className="text-slate-600" aria-hidden="true">·</span>
+              <a
+                href="https://github.com/nshd0/Subjects2Skills-Teachers-Studio"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-white transition-colors underline decoration-slate-600 hover:decoration-teal-400 cursor-pointer"
+              >
+                GitHub
+              </a>
+              <span className="text-slate-600" aria-hidden="true">·</span>
+              <button
+                type="button"
+                onClick={() => onNavigate('about')}
+                className="hover:text-white transition-colors cursor-pointer"
+              >
+                Privacy & Safety
+              </button>
+              <span className="text-slate-600" aria-hidden="true">·</span>
+              <button
+                type="button"
+                onClick={() => onNavigate('about')}
+                className="hover:text-white transition-colors cursor-pointer"
+              >
+                {t.navAbout}
+              </button>
+            </div>
           </div>
 
-          <div className="flex items-center gap-4 text-[11px] text-slate-400">
-            <button
-              onClick={() => onNavigate('about')}
-              className="hover:text-white transition-colors"
-            >
-              {t.navAbout}
-            </button>
-            <span>·</span>
-            <button
-              onClick={() => onNavigate('toolkit')}
-              className="hover:text-white transition-colors"
-            >
-              {t.navToolkit}
-            </button>
-            <span>·</span>
-            <button
-              onClick={() => onNavigate('feedback')}
-              className="hover:text-white transition-colors"
-            >
-              {t.navFeedback}
-            </button>
+          <div className="pt-4 border-t border-[#16324F] flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] text-slate-400">
+            <p>
+              Independent educator-built project. Not an official Government of India, NCERT, or CBSE platform.
+            </p>
+            <p className="shrink-0 text-slate-400">
+              No student personal data required • 100% Teacher-controlled
+            </p>
           </div>
         </div>
       </footer>

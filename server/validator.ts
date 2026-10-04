@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { TeacherRequest, GeneratedResource, LessonPlanData } from '../src/types';
+import { TeacherRequest, GeneratedResource, LessonPlanData, ResourceMetadata } from '../src/types';
 
 export interface ValidationResult<T> {
   isValid: boolean;
@@ -80,20 +80,21 @@ function sanitizeProse(text: string): { text: string; altered: boolean } {
 
   // Patterns implying official endorsement or official certification
   const bannedEndorsements = [
+    /\b(official approval|NCERT certified|CBSE approved|government recommended|Ministry-mandated|official NCF competency|nationally prescribed)\b/gi,
     /\b(officially endorsed by|official CBSE certification|approved by NCERT|CBSE-certified|NCERT-endorsed|Ministry of Education certified)\b/gi,
     /\b(official government syllabus code|official CBSE code)\b/gi,
   ];
 
   for (const pattern of bannedEndorsements) {
     if (pattern.test(result)) {
-      result = result.replace(pattern, 'Suggested instructional draft (teacher review required)');
+      result = result.replace(pattern, 'Suggested — teacher review required.');
       altered = true;
     }
   }
 
   // Check and scrub any student personal data requests
   const studentDataPatterns = [
-    /\b(record student phone number|collect student address|enter student photo|collect student Aadhaar|student home contact)\b/gi,
+    /\b(record student phone number|collect student address|enter student photo|collect student Aadhaar|student home contact|student personal data|student roll number|student marks|student phone numbers)\b/gi,
   ];
 
   for (const pattern of studentDataPatterns) {
@@ -136,6 +137,15 @@ export function validateAndRepairGeneratedOutput(
 
   const resourceId = `res_gemini_${Date.now()}`;
   const createdAt = new Date().toISOString();
+
+  const metadata: ResourceMetadata = {
+    id: resourceId,
+    generationEngine: 'gemini_structured_output',
+    engineLabel: process.env.GEMINI_MODEL || 'gemini-3.8-flash',
+    generatedAt: createdAt,
+    teacherReviewRequired: true,
+    curriculumMappingStatus: 'suggested_unverified',
+  };
 
   // 1. LESSON PLAN VALIDATION
   if (request.desiredResource === 'Lesson Plan') {
@@ -289,6 +299,7 @@ export function validateAndRepairGeneratedOutput(
         createdAt,
         request,
         resourceType: 'Lesson Plan',
+        metadata,
         lessonPlan: repairedLP,
       },
     };
@@ -314,6 +325,7 @@ export function validateAndRepairGeneratedOutput(
         createdAt,
         request,
         resourceType: 'Worksheet',
+        metadata,
         worksheet: {
           title: sanitizeProse(ws.title || `Practice Worksheet: ${request.topic}`).text,
           learningOutcome: sanitizeProse(ws.learningOutcome || `Demonstrate understanding of ${request.topic}`).text,
@@ -353,6 +365,7 @@ export function validateAndRepairGeneratedOutput(
         createdAt,
         request,
         resourceType: 'Formative Assessment',
+        metadata,
         assessment: {
           title: sanitizeProse(as.title || `Formative Assessment: ${request.topic}`).text,
           learningOutcome: sanitizeProse(as.learningOutcome || `Assess grasp of ${request.topic}`).text,
@@ -400,6 +413,7 @@ export function validateAndRepairGeneratedOutput(
         createdAt,
         request,
         resourceType: 'Rubric',
+        metadata,
         rubric: {
           competency: sanitizeProse(rub.competency || `Demonstrates competence in ${request.topic}`).text,
           criteria: criteria.map((c: any, idx: number) => ({
@@ -435,6 +449,7 @@ export function validateAndRepairGeneratedOutput(
       createdAt,
       request,
       resourceType: 'Project Brief',
+      metadata,
       projectBrief: {
         title: sanitizeProse(pb.title || `Inquiry Project: ${request.topic}`).text,
         drivingQuestion: sanitizeProse(pb.drivingQuestion || `How does ${request.topic} solve everyday challenges?`).text,

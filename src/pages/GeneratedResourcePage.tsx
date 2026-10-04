@@ -11,7 +11,7 @@ import { GeneratedSection } from '../components/GeneratedSection';
 import { RubricTable } from '../components/RubricTable';
 import { sectionVariants } from '../services/mockGenerator';
 import { requestSectionRegeneration } from '../services/apiService';
-import { AlertCircle, Clock, CheckCircle2, Lightbulb, ShieldAlert, Sparkles, RefreshCw, Cpu, RotateCcw } from 'lucide-react';
+import { AlertCircle, Clock, CheckCircle2, Lightbulb, ShieldAlert, Sparkles, RefreshCw, Cpu, RotateCcw, ClipboardCheck } from 'lucide-react';
 
 interface GeneratedResourcePageProps {
   resource: GeneratedResource;
@@ -32,6 +32,22 @@ export const GeneratedResourcePage: React.FC<GeneratedResourcePageProps> = ({
 }) => {
   const [resource, setResource] = useState<GeneratedResource>(initialResource);
   const t = translations[lang];
+
+  // Pre-export teacher review checklist state
+  const [checklist, setChecklist] = useState<Record<string, boolean>>({
+    competencyChecked: false,
+    activityFeasible: false,
+    languageAppropriate: false,
+    materialsAvailable: false,
+    assessmentMatchesOutcome: false,
+    supportAdaptedForLearners: false,
+  });
+
+  const toggleChecklist = (key: string) => {
+    setChecklist((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const confirmedCount = Object.values(checklist).filter(Boolean).length;
 
   // Synchronize internal state whenever initialResource prop updates
   React.useEffect(() => {
@@ -178,6 +194,57 @@ export const GeneratedResourcePage: React.FC<GeneratedResourcePageProps> = ({
           </div>
         )}
 
+        {/* Pre-Export Teacher Review Checklist (hidden in print) */}
+        <div className="no-print bg-white border border-slate-200 rounded-xl p-4 sm:p-5 shadow-xs space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <ClipboardCheck className="w-4 h-4 text-teal-800 shrink-0" />
+              <h2 className="text-xs sm:text-sm font-bold text-[#0F2438]">
+                {lang === 'hi' ? 'पूर्व-निर्यात शिक्षक समीक्षा चेकलिस्ट' : 'Pre-Export Teacher Review Checklist'}
+              </h2>
+            </div>
+            <span
+              className={`text-[11px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${
+                confirmedCount === 6
+                  ? 'bg-emerald-100 text-emerald-800'
+                  : 'bg-slate-100 text-slate-600'
+              }`}
+            >
+              {confirmedCount}/6 {lang === 'hi' ? 'पुष्टीकृत' : 'Confirmed'}
+            </span>
+          </div>
+          <p className="text-[11px] text-slate-500">
+            {lang === 'hi'
+              ? 'कक्षा में पढ़ाने या प्रिंट करने से पहले कृपया इन 6 मुख्य बिंदुओं की पुष्टि करें:'
+              : 'Before printing or taking this resource into class, please confirm these 6 pedagogical readiness items:'}
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 pt-1 text-xs text-slate-700">
+            {[
+              { key: 'competencyChecked', label: lang === 'hi' ? 'दक्षता सत्यापित' : 'Competency checked' },
+              { key: 'activityFeasible', label: lang === 'hi' ? 'गतिविधि व्यावहारिक' : 'Activity feasible' },
+              { key: 'languageAppropriate', label: lang === 'hi' ? 'भाषा उपयुक्त' : 'Language appropriate' },
+              { key: 'materialsAvailable', label: lang === 'hi' ? 'सामग्री उपलब्ध' : 'Materials available' },
+              { key: 'assessmentMatchesOutcome', label: lang === 'hi' ? 'आकलन परिणाम से मेल खाता है' : 'Assessment matches outcome' },
+              { key: 'supportAdaptedForLearners', label: lang === 'hi' ? 'विविध शिक्षार्थियों हेतु अनुकूलित' : 'Support adapted for learners' },
+            ].map((item) => (
+              <label
+                key={item.key}
+                className="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 border border-slate-100 cursor-pointer select-none"
+              >
+                <input
+                  type="checkbox"
+                  checked={checklist[item.key]}
+                  onChange={() => toggleChecklist(item.key)}
+                  className="rounded border-slate-300 text-teal-700 focus:ring-teal-600 w-4 h-4"
+                />
+                <span className={checklist[item.key] ? 'font-medium text-slate-900' : 'text-slate-600'}>
+                  {item.label}
+                </span>
+              </label>
+            ))}
+          </div>
+        </div>
+
         {/* Print Sheet Container */}
         <div className="print-sheet bg-white border border-slate-200 rounded-2xl p-5 sm:p-8 shadow-xs space-y-6">
           
@@ -218,6 +285,19 @@ export const GeneratedResourcePage: React.FC<GeneratedResourcePageProps> = ({
               {resource.lessonPlan?.contextSummary ||
                 `${resource.request.stage} · Grade ${resource.request.grade} · Duration: ${resource.request.duration}m · Materials: ${resource.request.materials || 'Standard classroom'} · Language: ${resource.request.language || 'English'}`}
             </p>
+
+            {/* Resource Metadata Bar (Visible in print and screen) */}
+            <div className="text-[11px] text-slate-500 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono border-t border-slate-100 pt-2">
+              <span>ID: <strong className="font-semibold text-slate-700">{resource.metadata?.id || resource.id}</strong></span>
+              <span aria-hidden="true">·</span>
+              <span>Engine: <strong className="font-semibold text-slate-700">{resource.metadata?.engineLabel || (usedFallback ? 'Local Rule-Based Template' : 'gemini-3.8-flash')}</strong></span>
+              <span aria-hidden="true">·</span>
+              <span>Generated: <strong className="font-semibold text-slate-700">{new Date(resource.metadata?.generatedAt || resource.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</strong></span>
+              <span aria-hidden="true">·</span>
+              <span>Review: <strong className="text-amber-800 font-semibold">Teacher Review Required</strong></span>
+              <span aria-hidden="true">·</span>
+              <span>Curriculum: <strong className="font-semibold text-slate-700">Suggested (Unverified Draft)</strong></span>
+            </div>
           </div>
 
           {/* ======================================================== */}
